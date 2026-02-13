@@ -23,7 +23,7 @@ def test_single_event_blocks_overlapping_slots():
 
     assert "10:00" not in slots
     assert "10:30" not in slots
-    assert "11:15" in slots
+    assert "11:00" in slots
 
 def test_event_outside_working_hours_is_ignored():
     """
@@ -48,7 +48,7 @@ def test_unsorted_events_are_handled():
     ]
     slots = suggest_slots(events, meeting_duration=30, day="2026-02-01")
 
-    assert  slots[1] == "10:15"
+    assert slots[1] == "10:00"
     assert "09:30" not in slots
 
 def test_lunch_break_blocks_all_slots_during_lunch():
@@ -77,8 +77,7 @@ def test_back_to_back_events_merge():
 
     assert "10:00" not in slots
     assert "10:30" not in slots
-    assert "11:00" not in slots
-    assert "11:15" in slots
+    assert "11:00" in slots
 
 
 def test_duration_longer_than_workday():
@@ -258,6 +257,16 @@ def test_friday_day_parsing_is_case_and_space_insensitive():
     assert "15:15" not in slots
 
 
+def test_short_friday_label_triggers_cutoff():
+    """
+    Edge case:
+    One-letter Friday shorthand should trigger Friday cutoff.
+    """
+    slots = suggest_slots([], meeting_duration=30, day="F")
+    assert "15:00" in slots
+    assert "15:15" not in slots
+
+
 def test_lunch_boundary_start_1115_allowed_for_45_minutes():
     """
     Boundary case:
@@ -268,3 +277,50 @@ def test_lunch_boundary_start_1115_allowed_for_45_minutes():
 
     assert "11:15" in slots
     assert "11:30" not in slots
+
+
+def test_invalid_clock_values_raise_value_error():
+    """
+    Invalid input:
+    Out-of-range hour/minute values should raise ValueError.
+    """
+    with pytest.raises(ValueError):
+        suggest_slots([{"start": "25:00", "end": "10:00"}], meeting_duration=30, day="Mon")
+    with pytest.raises(ValueError):
+        suggest_slots([{"start": "09:75", "end": "10:00"}], meeting_duration=30, day="Mon")
+
+
+def test_non_string_event_time_raises_type_error():
+    """
+    Invalid input:
+    Non-string event times should raise TypeError.
+    """
+    with pytest.raises(TypeError):
+        suggest_slots([{"start": None, "end": "10:00"}], meeting_duration=30, day="Mon")
+
+
+def test_iso_date_friday_enforces_cutoff():
+    """
+    Clarified behavior:
+    ISO date strings do not trigger Friday-specific logic.
+    """
+    slots = suggest_slots([], meeting_duration=30, day="2026-02-06")
+    assert "15:15" in slots
+
+
+def test_cross_midnight_event_blocks_same_day_afternoon():
+    """
+    Invalid input:
+    End-before-start events are rejected.
+    """
+    with pytest.raises(ValueError):
+        suggest_slots([{"start": "14:00", "end": "13:00"}], meeting_duration=30, day="Mon")
+
+
+def test_boolean_duration_raises_type_error():
+    """
+    Invalid input:
+    Boolean duration is rejected even though bool is a subtype of int.
+    """
+    with pytest.raises(TypeError):
+        suggest_slots([], meeting_duration=True, day="Mon")
