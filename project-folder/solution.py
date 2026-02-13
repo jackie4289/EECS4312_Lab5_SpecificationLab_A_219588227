@@ -69,6 +69,12 @@ def suggest_slots(
         merged = []
 
     latest_start = work_end - meeting_duration
+    # Additional constraint: on Fridays, meetings cannot start after 15:00.
+    day_key = day.strip().lower()
+    if day_key in ("fri", "friday"):
+        friday_latest_start = 15 * 60
+        if friday_latest_start < latest_start:
+            latest_start = friday_latest_start
     slots = []
     idx = 0
     for start in range(work_start, latest_start + 1, 15):

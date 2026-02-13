@@ -9,6 +9,7 @@ The hidden test suite used for grading contains additional edge cases and will n
 available to students.
 """
 import pytest
+import random
 from solution import suggest_slots
 
 
@@ -112,3 +113,158 @@ def test_duplicate_events_no_change():
     slots_single = suggest_slots([{"start": "10:00", "end": "10:30"}], meeting_duration=30, day="2026-02-01")
 
     assert slots_dup == slots_single
+
+
+def test_friday_no_starts_after_1500():
+    """
+    Requirement:
+    On Fridays, meetings must not start after 15:00.
+    """
+    events = []
+    slots = suggest_slots(events, meeting_duration=30, day="Fri")
+
+    assert "15:00" in slots
+    assert "15:15" not in slots
+    assert "16:00" not in slots
+
+
+def test_event_partially_outside_work_hours_blocks_overlap_only():
+    """
+    Boundary case:
+    Event clipping at work-start should still block overlapping morning slots.
+    """
+    events = [{"start": "08:30", "end": "09:30"}]
+    slots = suggest_slots(events, meeting_duration=30, day="2026-02-01")
+
+    assert "09:00" not in slots
+    assert "09:15" not in slots
+    assert "09:45" in slots
+
+
+def test_last_possible_start_non_friday_is_included():
+    """
+    Boundary case:
+    The latest valid non-Friday start should be included.
+    """
+    events = []
+    slots = suggest_slots(events, meeting_duration=60, day="Thu")
+
+    assert "16:00" in slots
+
+
+def test_last_possible_start_friday_is_1500():
+    """
+    Boundary case:
+    Friday latest start is capped at 15:00.
+    """
+    events = []
+    slots = suggest_slots(events, meeting_duration=15, day="Friday")
+
+    assert "15:00" in slots
+    assert "15:15" not in slots
+
+
+def test_zero_or_negative_duration_returns_empty():
+    """
+    Invalid input:
+    Non-positive duration should return no slots.
+    """
+    assert suggest_slots([], meeting_duration=0, day="Mon") == []
+    assert suggest_slots([], meeting_duration=-30, day="Mon") == []
+
+
+def test_invalid_time_format_raises_value_error():
+    """
+    Invalid input:
+    Malformed time strings should fail fast.
+    """
+    events = [{"start": "9:xx", "end": "10:00"}]
+    with pytest.raises(ValueError):
+        suggest_slots(events, meeting_duration=30, day="Mon")
+
+
+def test_missing_event_key_raises_key_error():
+    """
+    Invalid input:
+    Missing required event fields should raise KeyError.
+    """
+    events = [{"start": "09:00"}]
+    with pytest.raises(KeyError):
+        suggest_slots(events, meeting_duration=30, day="Mon")
+
+
+def test_randomized_event_order_invariance():
+    """
+    Randomized robustness:
+    Event ordering should not affect output.
+    """
+    base_events = [
+        {"start": "09:30", "end": "10:00"},
+        {"start": "11:00", "end": "11:30"},
+        {"start": "14:15", "end": "15:00"},
+        {"start": "15:30", "end": "16:00"},
+    ]
+    expected = suggest_slots(base_events, meeting_duration=30, day="Tue")
+
+    shuffled = base_events[:]
+    random.Random(4312).shuffle(shuffled)
+    actual = suggest_slots(shuffled, meeting_duration=30, day="Tue")
+
+    assert actual == expected
+
+
+def test_event_covering_workday_returns_empty():
+    """
+    Edge case:
+    A full-day event during work hours leaves no availability.
+    """
+    events = [{"start": "09:00", "end": "17:00"}]
+    slots = suggest_slots(events, meeting_duration=15, day="Mon")
+
+    assert slots == []
+
+
+def test_event_ending_at_work_start_does_not_block_0900():
+    """
+    Boundary case:
+    Event ending right at 09:00 should not remove morning availability.
+    """
+    events = [{"start": "08:00", "end": "09:00"}]
+    slots = suggest_slots(events, meeting_duration=30, day="Mon")
+
+    assert "09:00" in slots
+
+
+def test_event_starting_at_work_end_does_not_block_afternoon():
+    """
+    Boundary case:
+    Event starting at 17:00 should not affect workday slots.
+    """
+    events = [{"start": "17:00", "end": "18:00"}]
+    slots = suggest_slots(events, meeting_duration=30, day="Mon")
+
+    assert "16:30" in slots
+
+
+def test_friday_day_parsing_is_case_and_space_insensitive():
+    """
+    Edge case:
+    Friday constraint should apply with mixed case and surrounding whitespace.
+    """
+    events = []
+    slots = suggest_slots(events, meeting_duration=30, day="  fRiDay  ")
+
+    assert "15:00" in slots
+    assert "15:15" not in slots
+
+
+def test_lunch_boundary_start_1115_allowed_for_45_minutes():
+    """
+    Boundary case:
+    A meeting ending exactly at 12:00 should be allowed.
+    """
+    events = []
+    slots = suggest_slots(events, meeting_duration=45, day="Mon")
+
+    assert "11:15" in slots
+    assert "11:30" not in slots

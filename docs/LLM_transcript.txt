@@ -294,3 +294,76 @@ Yes — they cover a mix of constraints and edge cases. Breakdown:
 
 So yes, they cover requirements (availability, work hours), constraints (lunch, merging), and edge cases (duration size, duplicates, non-15 durations). If you want broader coverage, the next good gaps are “event at workday boundary” and “event ends exactly at slot start (inclusive end).”"
 --------------------------------------------------
+
+LAB 6 PROMPTS
+
+Prompt 1: update the suggest_slots function in solution.py with the new requirement we discussed
+LLM Response 1: I’ll patch solution.py to enforce the Friday cutoff (start <= 15 (line 0)) while preserving existing behavior, then run tests to confirm no regressions.
+
+Edited file
+solution.py
++6
+-0
+
+    latest_start = work_end - meeting_duration
+    # Additional constraint: on Fridays, meetings cannot start after 15:00.
+    day_key = day.strip().lower()
+    if day_key in ("fri", "friday"):
+        friday_latest_start = 15 * 60
+        if friday_latest_start < latest_start:
+            latest_start = friday_latest_start
+    slots = []
+I’ve applied the Friday rule and am running the current test suite in project-folder to verify existing cases still pass.
+
+Ran pytest -q for 1s
+
+
+Worked for 14s
+Updated suggest_slots in solution.py to enforce the new Friday requirement:
+
+If day is "Fri" or "Friday" (case-insensitive), latest_start is capped at 15 (line 0).
+All previous logic remains unchanged.
+Validation:
+
+Ran pytest in project-folder
+Result: 9 passed
+--------------------------------------------------
+Prompt 2: add a test_solution test for the requirement we discussed to check if the checks has really passed
+LLM Response 2: I’ll add a focused Friday-cutoff test to test_solution.py, then run pytest in project-folder to confirm it passes with your updated function.
+
+Edited file
+test_solution.py
++13
+-0
+
+    assert slots_dup == slots_single
+
+
+def test_friday_no_starts_after_1500():
+    """
+    Requirement:
+    On Fridays, meetings must not start after 15:00.
+    """
+    events = []
+    slots = suggest_slots(events, meeting_duration=30, day="Fri")
+
+    assert "15:00" in slots
+    assert "15:15" not in slots
+    assert "16:00" not in slots
+I added the Friday-specific test and now I’m running the suite to verify the new check passes.
+
+Ran pytest -q for 1s
+
+
+Worked for 13s
+Added a new test in test_solution.py:
+
+test_friday_no_starts_after_1500
+It checks:
+
+15 (line 0) is allowed on Friday
+15 (line 15) and later are excluded
+Validation result:
+
+cd project-folder && pytest -q
+10 passed
